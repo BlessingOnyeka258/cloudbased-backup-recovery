@@ -18,57 +18,65 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 # --- Ensure Tables are created in Production ---
-with app.app_context():
-    db.create_all()
-    # Seeding will be skipped if data exists
-    seed_data()
+try:
+    with app.app_context():
+        print("Initializing database...")
+        db.create_all()
+        seed_data()
+        print("Database initialization complete.")
+except Exception as e:
+    print(f"Database initialization skipped or failed: {e}")
 
 # --- Database Seeding ---
 def seed_data():
-    if User.query.first():
-        return
+    try:
+        if User.query.first():
+            return
 
-    print("Seeding database...")
-    admin = User(username='admin', password='password123', role='System Admin')
-    db.session.add(admin)
-    db.session.commit()
-
-    device_types = ['Workstation', 'Laptop', 'Server', 'Mobile']
-    device_names = ['Workstation-HQ-01', 'Manager-Laptop', 'Sales-Mobile-04', 'Dev-Ubuntu-Srv', 'Reception-PC']
-    
-    for name in device_names:
-        device = Device(
-            name=name,
-            type=random.choice(device_types),
-            storage=f"{random.randint(10, 500)} GB",
-            health=random.randint(80, 100),
-            user_id=admin.id
-        )
-        db.session.add(device)
+        print("Seeding database...")
+        admin = User(username='admin', password='password123', role='System Admin')
+        db.session.add(admin)
         db.session.commit()
 
-        # Add initial backups
-        for i in range(3):
-            snapshot = Snapshot(
-                device_id=device.id,
-                status='successful',
-                size=f"{random.uniform(1.0, 10.0):.1f} GB",
-                health=device.health - random.randint(0, 5),
-                timestamp=datetime.utcnow() - timedelta(days=i+1)
+        device_types = ['Workstation', 'Laptop', 'Server', 'Mobile']
+        device_names = ['Workstation-HQ-01', 'Manager-Laptop', 'Sales-Mobile-04', 'Dev-Ubuntu-Srv', 'Reception-PC']
+        
+        for name in device_names:
+            device = Device(
+                name=name,
+                type=random.choice(device_types),
+                storage=f"{random.randint(10, 500)} GB",
+                health=random.randint(80, 100),
+                user_id=admin.id
             )
-            db.session.add(snapshot)
+            db.session.add(device)
+            db.session.commit()
 
-    # Initial Audit Logs
-    logs = [
-        AuditLog(action='SYSTEM_INIT', details='Flask-based recovery system initialized.'),
-        AuditLog(action='USER_LOGIN', details='Admin session established.'),
-        AuditLog(action='DATABASE_MIGRATE', details='Schema migrated to SQLAlchemy production structure.')
-    ]
-    for log in logs:
-        db.session.add(log)
-    
-    db.session.commit()
-    print("Database seeded successfully!")
+            # Add initial backups
+            for i in range(3):
+                snapshot = Snapshot(
+                    device_id=device.id,
+                    status='successful',
+                    size=f"{random.uniform(1.0, 10.0):.1f} GB",
+                    health=device.health - random.randint(0, 5),
+                    timestamp=datetime.utcnow() - timedelta(days=i+1)
+                )
+                db.session.add(snapshot)
+
+        # Initial Audit Logs
+        logs = [
+            AuditLog(action='SYSTEM_INIT', details='Flask-based recovery system initialized.'),
+            AuditLog(action='USER_LOGIN', details='Admin session established.'),
+            AuditLog(action='DATABASE_MIGRATE', details='Schema migrated to SQLAlchemy production structure.')
+        ]
+        for log in logs:
+            db.session.add(log)
+        
+        db.session.commit()
+        print("Database seeded successfully!")
+    except Exception as e:
+        db.session.rollback()
+        print(f"Seeding error: {e}")
 
 # --- Routes ---
 
