@@ -8,10 +8,20 @@ import random
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super-secret-recovery-key'
 # Fallback to SQLite if DATABASE_URL is not set
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///cloud_recover.db')
+db_url = os.environ.get('DATABASE_URL', 'sqlite:///cloud_recover.db')
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
+
+# --- Ensure Tables are created in Production ---
+with app.app_context():
+    db.create_all()
+    # Seeding will be skipped if data exists
+    seed_data()
 
 # --- Database Seeding ---
 def seed_data():
@@ -191,7 +201,4 @@ def sync_device(device_id):
     return jsonify({'success': False}), 404
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        seed_data()
     app.run(debug=True, port=5000)
