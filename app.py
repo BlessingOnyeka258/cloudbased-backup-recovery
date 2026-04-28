@@ -122,6 +122,56 @@ def get_logs():
         'timestamp': l.timestamp.strftime('%Y-%m-%d %H:%M:%S')
     } for l in logs])
 
+@app.route('/api/devices', methods=['POST'])
+def add_device():
+    data = request.get_json()
+    name = data.get('name')
+    device_type = data.get('type')
+    storage = data.get('storage')
+    
+    user = User.query.filter_by(username=session.get('username')).first()
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    new_device = Device(
+        name=name,
+        type=device_type,
+        storage=storage,
+        health=100,
+        user_id=user.id
+    )
+    
+    log = AuditLog(
+        action='DEVICE_REGISTERED',
+        details=f"New device registered: {name} ({device_type})",
+        user=user.username
+    )
+    
+    db.session.add(new_device)
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'device': {
+        'id': new_device.id,
+        'name': new_device.name,
+        'type': new_device.type,
+        'status': new_device.status,
+        'storage': new_device.storage,
+        'health': new_device.health
+    }})
+
+@app.route('/api/logs', methods=['POST'])
+def add_log():
+    data = request.get_json()
+    action = data.get('action')
+    details = data.get('details')
+    user = session.get('username', 'System')
+    
+    new_log = AuditLog(action=action, details=details, user=user)
+    db.session.add(new_log)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/api/sync/<device_id>', methods=['POST'])
 def sync_device(device_id):
     device = Device.query.get(device_id)

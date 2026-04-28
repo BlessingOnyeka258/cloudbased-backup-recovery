@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | CloudRecover</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .login-page {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at top right, rgba(14, 165, 233, 0.05), transparent),
+                        radial-gradient(circle at bottom left, rgba(139, 92, 246, 0.05), transparent);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .login-header { text-align: center; }
+        .logo-box {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: white;
+            box-shadow: 0 10px 25px rgba(14, 165, 233, 0.2);
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+        .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; }
+        input {
+            width: 100%;
+            padding: 1rem 1.25rem;
+            background: var(--bg-tertiary);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: var(--transition-fast);
+        }
+        input:focus {
+            outline: none;
+            background: white;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+        }
+        #error-message { color: #ef4444; font-size: 0.85rem; text-align: center; min-height: 1.2rem; }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card glass animate-fade-in">
+            <div class="login-header">
+                <div class="logo-box">🛡️</div>
+                <h1>CloudRecover</h1>
+                <p style="color: var(--text-muted)">Secure Endpoint Data Protection</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="Enter administrator username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                
+                <div id="error-message"></div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 1rem;">
+                    Sign In to Console
+                </button>
+            </form>
+            
+            <div style="text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+                &copy; 2026 CloudRecover Advanced Agentic.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error-message');
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    window.location.reload();
+                } else {
+                    errorDiv.textContent = result.message;
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Server connection failed.';
+            }
+        });
+    </script>
+</body>
+</html>

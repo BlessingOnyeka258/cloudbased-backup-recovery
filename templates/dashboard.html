@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console | CloudRecover</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .app-layout { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 280px; padding: 2rem; display: flex; flex-direction: column; gap: 2rem; border-right: 1px solid var(--border-subtle); background: var(--bg-secondary); }
+        .main-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-primary); overflow-y: auto; }
+        .header { padding: 1.5rem 3rem; display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; z-index: 100; }
+        .view-container { padding: 3rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            width: 100%;
+            max-width: 500px;
+            padding: 3rem;
+            background: white;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+        .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+        .form-select {
+            width: 100%;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            font-family: inherit;
+        }
+        input {
+            width: 100%;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            font-family: inherit;
+        }
+        input:focus, .form-select:focus {
+            outline: none;
+            background: white;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+        }
+        
+        /* Navigation */
+        .nav-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .nav-item { padding: 0.85rem 1.25rem; border-radius: 12px; cursor: pointer; display: flex; align-items: center; gap: 1rem; color: var(--text-secondary); transition: var(--transition-base); font-weight: 500; }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: var(--bg-tertiary); color: var(--accent-cyan); font-weight: 600; box-shadow: inset 0 0 0 1px var(--glass-border); }
+        
+        /* Dashboard Specific */
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 3rem; }
+        .stat-card { padding: 2rem; }
+        .stat-card .label { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; display: block; }
+        .stat-card .value { font-size: 2.5rem; font-weight: 700; color: var(--text-primary); display: block; margin-bottom: 0.5rem; }
+        .stat-card .trend { font-size: 0.85rem; font-weight: 600; }
+        
+        .device-card { padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem; position: relative; border-radius: 20px; transition: var(--transition-base); }
+        .device-card:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05); }
+        .device-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+        .icon-box {
+            width: 52px; height: 52px; background: var(--bg-tertiary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; position: relative;
+        }
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; position: absolute; top: -2px; right: -2px;
+        }
+        .device-info h4 { font-size: 1.1rem; margin: 0; font-weight: 700; }
+        .device-info p { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
+        
+        .card-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1rem 0; }
+        .metric-item { display: flex; flex-direction: column; gap: 0.5rem; }
+        .metric-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
+
+        .health-bar-container { margin-top: 1rem; }
+        .health-bar-label { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .health-bar { width: 100%; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
+        .health-fill { height: 100%; transition: width 1s ease-out; }
+
+        .card-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
+        .btn-icon-sm {
+            width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border-subtle); background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: var(--transition-fast); font-size: 1.1rem;
+        }
+        .btn-icon-sm:hover { background: var(--bg-tertiary); border-color: var(--text-muted); transform: scale(1.05); }
+        
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* Activity Feed */
+        .activity-item { display: flex; gap: 1rem; align-items: flex-start; }
+        .activity-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; box-shadow: 0 0 10px rgba(14, 165, 233, 0.3); }
+        .activity-content h5 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+        .activity-content p { font-size: 0.8rem; color: var(--text-muted); }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th { text-align: left; padding: 1rem; border-bottom: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+        td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-subtle); }
+        
+        .tab-view { display: none; }
+        .tab-view.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="logo-section">
+                <h2 style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="background: var(--accent-cyan); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">🛡️</span>
+                    CloudRecover
+                </h2>
+            </div>
+            
+            <nav class="nav-list">
+                <div class="nav-item active" onclick="switchTab('dashboard', this)"><span>📊</span> Dashboard</div>
+                <div class="nav-item" onclick="switchTab('devices', this)"><span>💻</span> Endpoint Devices</div>
+                <div class="nav-item" onclick="switchTab('backups', this)"><span>☁️</span> Backup History</div>
+                <div class="nav-item" onclick="switchTab('security', this)"><span>🛡️</span> Security & Audit</div>
+            </nav>
+            
+            <div style="margin-top: auto; padding: 1rem; border-radius: 12px; background: var(--bg-tertiary);">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-purple); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700;">{{ session['username'][0].upper() }}</div>
+                    <div>
+                        <p style="font-weight: 600; font-size: 0.9rem;">{{ session['username'] }}</p>
+                        <p style="font-size: 0.75rem; color: var(--text-muted);">Administrator</p>
+                    </div>
+                </div>
+                <a href="/logout" style="display: block; margin-top: 1rem; font-size: 0.85rem; color: #ef4444; text-decoration: none; font-weight: 600;">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <div class="search-bar">
+                    <input type="text" placeholder="Search devices, backups..." style="padding: 0.6rem 1.5rem; width: 300px; font-size: 0.85rem;">
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="triggerBulkSync()">⚡ Quick Sync</button>
+                </div>
+            </header>
+
+            <div class="view-container">
+                <!-- Dashboard Tab -->
+                <div id="tab-dashboard" class="tab-view active animate-fade-in">
+                    <h2 style="margin-bottom: 2rem;">Overview</h2>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 1.25rem;">Critical Endpoints</h3>
+                        <a href="#" onclick="switchTab('devices', document.querySelectorAll('.nav-item')[1])" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.9rem; font-weight: 600;">View All Devices →</a>
+                    </div>
+
+                    <div class="grid-auto" id="critical-endpoints" style="margin-bottom: 3rem;">
+                        <!-- Critical endpoints populated by JS -->
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card glass">
+                            <span class="label">System Availability</span>
+                            <span class="value">99.9%</span>
+                            <span class="trend" style="color: var(--accent-emerald);">Highly Reliable</span>
+                        </div>
+                        <div class="stat-card glass">
+                            <span class="label">Storage Used</span>
+                            <span class="value">1.2 TB</span>
+                            <span class="trend" style="color: var(--accent-orange);">85% of quota</span>
+                        </div>
+                        <div class="stat-card glass">
+                            <span class="label">Global Health Index</span>
+                            <span class="value" id="stat-health-index">0%</span>
+                            <span class="trend" style="color: var(--accent-emerald);">Stable Network</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 2rem;">
+                        <div class="glass" style="padding: 2.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                                <h3>System Health Metrics</h3>
+                                <div style="display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                                    <span style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></div> Operational</span>
+                                    <span style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-orange);"></div> Maintenance</span>
+                                </div>
+                            </div>
+                            <div style="height: 300px; width: 100%; position: relative;">
+                                <canvas id="healthChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="glass" style="padding: 2.5rem;">
+                            <h3>Recent System Activity</h3>
+                            <div id="activity-feed" style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recovery Progress Modal -->
+                <div id="recovery-modal" class="modal-overlay" style="display: none;">
+                    <div class="modal-content glass animate-fade-in" style="max-width: 600px;">
+                        <div id="recovery-init">
+                            <h3>Initialize System Recovery</h3>
+                            <p style="color: var(--text-muted); margin-bottom: 2rem;">Restoring endpoint data from the latest secure snapshot.</p>
+                            
+                            <div class="glass" style="padding: 1.5rem; margin-bottom: 2rem; background: var(--bg-tertiary);">
+                                <div style="display: flex; align-items: center; gap: 1.5rem;">
+                                    <div id="rec-device-icon" style="font-size: 2rem;">💻</div>
+                                    <div>
+                                        <h4 id="rec-device-name">Device Name</h4>
+                                        <p id="rec-device-id" style="font-size: 0.8rem; color: var(--text-muted);">ID: ...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 1rem;">
+                                <button class="btn btn-outline" style="flex: 1;" onclick="closeRecoveryModal()">Abort</button>
+                                <button class="btn btn-primary" style="flex: 2;" onclick="startRecoveryProcess()">Execute Recovery Protocol</button>
+                            </div>
+                        </div>
+
+                        <div id="recovery-progress" style="display: none; text-align: center; padding: 2rem 0;">
+                            <div class="recovery-spinner" style="width: 80px; height: 80px; border: 4px solid var(--bg-tertiary); border-top: 4px solid var(--accent-cyan); border-radius: 50%; margin: 0 auto 2rem; animation: spin 1s linear infinite;"></div>
+                            <h3 id="recovery-step">Validating Integrity...</h3>
+                            <p id="recovery-substep" style="color: var(--text-muted); margin-bottom: 2rem;">Checking snapshot checksums...</p>
+                            
+                            <div style="width: 100%; background: var(--bg-tertiary); height: 8px; border-radius: 4px; overflow: hidden;">
+                                <div id="recovery-bar" style="width: 0%; height: 100%; background: var(--accent-cyan); transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+
+                        <div id="recovery-success" style="display: none; text-align: center; padding: 2rem 0;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+                            <h3>Recovery Successful</h3>
+                            <p style="color: var(--text-muted); margin-bottom: 2rem;">Endpoint has been restored to its optimal state.</p>
+                            <button class="btn btn-primary" style="width: 100%;" onclick="closeRecoveryModal()">Return to Dashboard</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-devices" class="tab-view animate-fade-in">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2>Endpoint Devices</h2>
+                        <button class="btn btn-outline" onclick="openModal()">+ Register New Device</button>
+                    </div>
+                    <div class="grid-auto" id="device-list">
+                        <!-- Devices populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Registration Modal -->
+                <div id="register-modal" class="modal-overlay" style="display: none;">
+                    <div class="modal-content glass animate-fade-in">
+                        <h3>Register New Endpoint</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 2rem;">Add a new device to the recovery monitoring network.</p>
+                        
+                        <form id="register-form">
+                            <div class="form-group">
+                                <label>Device Name</label>
+                                <input type="text" id="dev-name" placeholder="e.g. Finance-PC-01" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Device Type</label>
+                                <select id="dev-type" class="form-select">
+                                    <option value="Workstation">Workstation</option>
+                                    <option value="Laptop">Laptop</option>
+                                    <option value="Server">Server</option>
+                                    <option value="Mobile">Mobile</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Total Storage</label>
+                                <input type="text" id="dev-storage" placeholder="e.g. 500 GB" required>
+                            </div>
+                            
+                            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                                <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeModal()">Cancel</button>
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Register Device</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Backups Tab -->
+                <div id="tab-backups" class="tab-view animate-fade-in">
+                    <h2 style="margin-bottom: 2rem;">Backup Snapshot History</h2>
+                    <div class="glass" style="padding: 1rem; overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Device</th>
+                                    <th>Status</th>
+                                    <th>Size</th>
+                                    <th>Health</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backup-list">
+                                <!-- Backups populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Security Tab -->
+                <div id="tab-security" class="tab-view animate-fade-in">
+                    <h2 style="margin-bottom: 2rem;">Security Audit Trail</h2>
+                    <div class="glass" style="padding: 2rem; max-height: 700px; overflow-y: auto;" id="log-list">
+                        <!-- Logs populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function switchTab(tabId, el) {
+            document.querySelectorAll('.tab-view').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            el.classList.add('active');
+            
+            if (tabId === 'devices') loadDevices();
+            if (tabId === 'backups') loadBackups();
+            if (tabId === 'security') loadLogs();
+        }
+
+        let healthChart;
+
+        function initChart(deviceData) {
+            const ctx = document.getElementById('healthChart').getContext('2d');
+            const labels = deviceData.map(d => d.name);
+            const healthValues = deviceData.map(d => d.health);
+            
+            if (healthChart) healthChart.destroy();
+            
+            healthChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Device Health %',
+                        data: healthValues,
+                        backgroundColor: deviceData.map(d => d.health > 90 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(245, 158, 11, 0.6)'),
+                        borderColor: deviceData.map(d => d.health > 90 ? '#10b981' : '#f59e0b'),
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        barThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { size: 14, weight: 'bold' },
+                            padding: 12,
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                            ticks: { font: { size: 12 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 12 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadDevices() {
+            const res = await fetch('/api/devices');
+            const devices = await res.json();
+            
+            // Update Stats
+            const healthIndex = Math.round(devices.reduce((acc, d) => acc + d.health, 0) / (devices.length || 1));
+            document.getElementById('stat-health-index').textContent = healthIndex + '%';
+            
+            // Initialize chart on dashboard
+            if (document.getElementById('tab-dashboard').classList.contains('active')) {
+                initChart(devices);
+                renderCriticalEndpoints(devices.slice(0, 3));
+                loadActivity();
+            }
+            
+            renderDeviceGrid(devices, 'device-list');
+        }
+
+        function renderCriticalEndpoints(devices) {
+            renderDeviceGrid(devices, 'critical-endpoints');
+        }
+
+        function renderDeviceGrid(devices, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            container.innerHTML = devices.map(d => `
+                <div class="device-card glass animate-fade-in">
+                    <div class="device-header">
+                        <div class="icon-box">
+                            💻
+                            <div class="status-dot" style="background: ${d.status === 'online' ? 'var(--accent-emerald)' : 'var(--accent-orange)'}"></div>
+                        </div>
+                        <div class="device-info">
+                            <h4>${d.name}</h4>
+                            <p>${d.type}</p>
+                        </div>
+                        <div style="margin-left: auto;">
+                            <input type="checkbox" style="width: 18px; height: 18px;">
+                        </div>
+                    </div>
+                    
+                    <div class="card-metrics">
+                        <div class="metric-item">
+                            <span class="metric-label">Last Backup</span>
+                            <span class="metric-value">${d.lastSync.split(' ')[0]}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Storage Used</span>
+                            <span class="metric-value">${d.storage}</span>
+                        </div>
+                    </div>
+
+                    <div class="health-bar-container">
+                        <div class="health-bar-label">
+                            <span>System Health</span>
+                            <span>${d.health}%</span>
+                        </div>
+                        <div class="health-bar">
+                            <div class="health-fill" style="width: ${d.health}%; background: ${d.health > 90 ? 'var(--accent-emerald)' : 'var(--accent-orange)'}"></div>
+                        </div>
+                    </div>
+
+                    <div class="card-actions">
+                        <button class="btn-icon-sm" title="Quick Sync" onclick="syncDevice('${d.id}', this)">⚡</button>
+                        <button class="btn-icon-sm" title="Emergency Recovery" onclick="openRecoveryModal('${d.id}', '${d.name}', '${d.type}')">🛡️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadActivity() {
+            const res = await fetch('/api/logs');
+            const logs = await res.json();
+            const container = document.getElementById('activity-feed');
+            if (!container) return;
+
+            container.innerHTML = logs.slice(0, 5).map(l => `
+                <div class="activity-item">
+                    <div class="activity-dot" style="background: ${l.action.includes('BACKUP') ? 'var(--accent-cyan)' : 'var(--accent-purple)'}"></div>
+                    <div class="activity-content">
+                        <h5>${l.action.replace('_', ' ')}</h5>
+                        <p>${l.timestamp.split(' ')[0]} • ${l.details}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadBackups() {
+            const res = await fetch('/api/backups');
+            const backups = await res.json();
+            const statBackups = document.getElementById('stat-backups');
+            if (statBackups) statBackups.textContent = backups.length;
+            
+            const container = document.getElementById('backup-list');
+            container.innerHTML = backups.map(b => `
+                <tr>
+                    <td style="font-family: monospace; color: var(--text-muted)">${b.id.substring(0,8)}</td>
+                    <td style="font-weight: 600">${b.device}</td>
+                    <td><span class="badge badge-success">${b.status}</span></td>
+                    <td style="font-weight: 600; color: var(--accent-cyan)">${b.size}</td>
+                    <td style="font-weight: 600">${b.health}%</td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem">${b.timestamp}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadLogs() {
+            const res = await fetch('/api/logs');
+            const logs = await res.json();
+            const container = document.getElementById('log-list');
+            container.innerHTML = logs.map(l => `
+                <div style="padding: 1.25rem; border-bottom: 1px solid var(--border-subtle); display: flex; gap: 1.5rem;">
+                    <div style="width: 4px; border-radius: 2px; background: ${l.action.includes('INIT') ? 'var(--accent-purple)' : 'var(--accent-cyan)'}"></div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 700; font-size: 0.75rem; background: var(--bg-tertiary); padding: 0.2rem 0.5rem; border-radius: 4px;">${l.action}</span>
+                            <span style="font-size: 0.8rem; color: var(--text-muted)">${l.timestamp}</span>
+                        </div>
+                        <p style="font-size: 0.95rem; color: var(--text-secondary)">${l.details}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function syncDevice(id, btn) {
+            btn.textContent = 'Syncing...';
+            btn.disabled = true;
+            try {
+                await fetch('/api/sync/' + id, { method: 'POST' });
+                await loadDevices();
+            } catch (err) {
+                alert('Sync failed');
+            }
+        }
+
+        async function triggerBulkSync() {
+            alert('Bulk synchronization started for all active nodes.');
+        }
+
+        // Recovery Logic
+        let currentRecoveryId = null;
+
+        function openRecoveryModal(id, name, type) {
+            currentRecoveryId = id;
+            document.getElementById('rec-device-name').textContent = name;
+            document.getElementById('rec-device-id').textContent = 'ID: ' + id.substring(0, 12) + '...';
+            document.getElementById('rec-device-icon').textContent = type === 'Mobile' ? '📱' : (type === 'Server' ? '💾' : '💻');
+            
+            document.getElementById('recovery-init').style.display = 'block';
+            document.getElementById('recovery-progress').style.display = 'none';
+            document.getElementById('recovery-success').style.display = 'none';
+            document.getElementById('recovery-modal').style.display = 'flex';
+        }
+
+        function closeRecoveryModal() {
+            document.getElementById('recovery-modal').style.display = 'none';
+        }
+
+        async function startRecoveryProcess() {
+            document.getElementById('recovery-init').style.display = 'none';
+            document.getElementById('recovery-progress').style.display = 'block';
+            
+            const steps = [
+                { label: 'Establishing Secure Channel...', bar: 20 },
+                { label: 'Validating Snapshot Integrity...', bar: 45 },
+                { label: 'Reconstructing File Systems...', bar: 75 },
+                { label: 'Finalizing Endpoint Sync...', bar: 100 }
+            ];
+
+            for (const step of steps) {
+                document.getElementById('recovery-step').textContent = step.label;
+                document.getElementById('recovery-bar').style.width = step.bar + '%';
+                await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+            }
+
+            // Call Backend to Log Recovery
+            await fetch('/api/logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'RECOVERY_SUCCESSFUL',
+                    details: `Full recovery completed for device ID ${currentRecoveryId}`
+                })
+            });
+
+            document.getElementById('recovery-progress').style.display = 'none';
+            document.getElementById('recovery-success').style.display = 'block';
+            loadActivity();
+        }
+
+        // Modal Logic
+        function openModal() {
+            document.getElementById('register-modal').style.display = 'flex';
+        }
+        function closeModal() {
+            document.getElementById('register-modal').style.display = 'none';
+        }
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('dev-name').value,
+                type: document.getElementById('dev-type').value,
+                storage: document.getElementById('dev-storage').value
+            };
+            
+            const res = await fetch('/api/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                closeModal();
+                loadDevices();
+                document.getElementById('register-form').reset();
+            } else {
+                alert('Registration failed');
+            }
+        });
+
+        // Initial Load
+        loadDevices();
+        loadBackups();
+    </script>
+</body>
+</html>
